@@ -1,0 +1,98 @@
+package mtprotoedge
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"net"
+	"testing"
+	"time"
+
+	"go.uber.org/zap/zaptest"
+
+	"github.com/gotd/log/logzap"
+	"github.com/iamxvbaba/td/clock"
+	"github.com/iamxvbaba/td/exchange"
+	"github.com/iamxvbaba/td/session"
+	"github.com/iamxvbaba/td/telegram"
+	"github.com/iamxvbaba/td/telegram/dcs"
+	"github.com/iamxvbaba/td/tg"
+	"github.com/iamxvbaba/td/transport"
+
+	"rugram/internal/app/auth"
+	"rugram/internal/app/updates"
+	"rugram/internal/app/users"
+	"rugram/internal/rpc"
+	"rugram/internal/store/memory"
+)
+
+// TestTelegramClientEndToEnd is the connection layer's strongest end-to-end
+// check: it uses iamxvbaba/td's full telegram.Client (rather than the low-level
+// cipher) to connect to a local mtprotoedge, and the client automatically
+// initializes via invokeWithLayer(initConnection(help.getConfig)) and obtains a
+// Config containing the local DC.
+func TestTelegramClientEndToEnd(t *testing.T) {
+	const dc = 2
+
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("gen rsa: %v", err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	tcpAddr := ln.Addr().(*net.TCPAddr)
+
+	userStore := memory.NewUserStore()
+	authzStore := memory.NewAuthorizationStore()
+	authKeyStore := memory.NewAuthKeyStore()
+	deps := rpc.Deps{
+		Auth:    auth.NewService(userStore, authzStore, memory.NewCodeStore(), authKeyStore, memory.NewTempAuthKeyBindingStore(authKeyStore), "12345"),
+		Users:   users.NewService(userStore),
+		Updates: updates.NewService(memory.NewUpdateStateStore(), memory.NewUpdateEventStore()),
+	}
+	router := rpc.New(rpc.Config{DC: dc, IP: tcpAddr.IP.String(), Port: tcpAddr.Port}, deps, zaptest.NewLogger(t), clock.System)
+	srv := New(Options{Logger: zaptest.NewLogger(t), DC: dc, RSAKey: rsaKey, AuthKeys: authKeyStore, LayerRPC: router})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.Serve(ctx, ln) }()
+
+	opts := telegram.Options{
+		PublicKeys:     []exchange.PublicKey{{RSA: &rsaKey.PublicKey}},
+		Resolver:       dcs.Plain(dcs.PlainOptions{Protocol: transport.Intermediate}),
+		DCList:         dcs.List{Options: []tg.DCOption{{ID: dc, IPAddress: tcpAddr.IP.String(), Port: tcpAddr.Port, Static: true}}},
+		Logger:         logzap.New(zaptest.NewLogger(t).Named("client")),
+		SessionStorage: &session.StorageMemory{},
+		UpdateHandler:  telegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error { return nil }),
+	}
+	client := telegram.NewClient(1, "hash", opts)
+
+	if err := client.Run(ctx, func(ctx context.Context) error {
+		cfg, err := tg.NewClient(client).HelpGetConfig(ctx)
+		if err != nil {
+			return err
+		}
+		if cfg.ThisDC != dc {
+			t.Errorf("config.ThisDC = %d, want %d", cfg.ThisDC, dc)
+		}
+		if len(cfg.DCOptions) != 1 {
+			t.Errorf("config.DCOptions = %+v, want one reconnect route", cfg.DCOptions)
+		} else {
+			option := cfg.DCOptions[0]
+			if option.ID != dc || option.IPAddress != tcpAddr.IP.String() || option.Port != tcpAddr.Port {
+				t.Errorf("config.DCOptions[0] = %+v, want dc=%d at %s", option, dc, tcpAddr)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("telegram client run: %v", err)
+	}
+
+	cancel()
+	if err := <-serveErr; err != nil {
+		t.Errorf("serve: %v", err)
+	}
+}

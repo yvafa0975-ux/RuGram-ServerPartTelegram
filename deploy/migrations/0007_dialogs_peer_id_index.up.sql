@@ -1,0 +1,13 @@
+-- Reverse index on dialogs by peer_id.
+-- The dialog_light invalidation fan-out function
+-- rugram_bump_private_dialog_light_for_user filters dialogs by peer_id ("which
+-- users have a private-chat conversation with this user"), but every existing
+-- index on dialogs leads with user_id (the primary key +
+-- dialogs_user_folder_top_message_idx + dialogs_user_pinned_order_idx), so that
+-- peer_id query could previously only Seq Scan.
+-- dialogs has CHECK (peer_type = 'user'), so a single-column (peer_id) index hits
+-- exactly and needs no peer_type prefix, symmetric with
+-- contacts.contacts_contact_user_id_idx. On profile changes / Premium expiry that
+-- trigger the fan-out, this turns a full-table scan into an index scan (the
+-- benefit grows with table size).
+CREATE INDEX dialogs_peer_id_idx ON public.dialogs USING btree (peer_id);

@@ -1,0 +1,14 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    # schema takes only *.up.sql, so golang-migrate's down scripts (DROP) are not
+    # treated as part of the schema by sqlc.
+    # Shares the same migration files with golang-migrate: a single source of truth.
+    schema: "deploy/migrations/*.up.sql"
+    queries: "internal/store/postgres/queries"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/store/postgres/sqlcgen"
+        sql_package: "pgx/v5"
+        emit_pointers_for_null_types: true

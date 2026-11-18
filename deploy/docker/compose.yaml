@@ -1,0 +1,236 @@
+name: ${COMPOSE_PROJECT_NAME:-rugram-main}
+
+x-build-args: &build-args
+  VCS_REF: ${RUGRAM_BUILD_COMMIT:-unknown}
+  VCS_BRANCH: ${RUGRAM_BUILD_BRANCH:-main}
+  VCS_TREE_STATE: ${RUGRAM_BUILD_TREE_STATE:-unknown}
+  BUILD_DATE: ${RUGRAM_BUILD_DATE:-unknown}
+
+x-app: &app
+  init: true
+  restart: unless-stopped
+  read_only: true
+  user: "10001:10001"
+  cap_drop:
+    - ALL
+  pids_limit: 1024
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=128m
+  stop_grace_period: 1m
+  logging: &app-logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:979c4379dd698aba0b890599a6104e082035f98ef31d9b9291ec22f2b13059ca
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rugram_main}
+      POSTGRES_USER: ${POSTGRES_USER:-rugram}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/docker/.env}
+      POSTGRES_INITDB_ARGS: --data-checksums
+      TZ: UTC
+    command:
+      - postgres
+      - -c
+      - max_locks_per_transaction=512
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+    shm_size: 256mb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - name: server-host-postgres
+        target: 5432
+        published: "${RUGRAM_POSTGRES_HOST_PORT:-15432}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 1m
+    logging: *app-logging
+    networks:
+      - data
+      - server_host_access
+
+  redis:
+    image: redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065
+    environment:
+      REDIS_PASSWORD: ${RUGRAM_REDIS_PASSWORD:?set RUGRAM_REDIS_PASSWORD in deploy/docker/.env}
+    command:
+      - sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis_data:/data
+    ports:
+      - name: server-host-redis
+        target: 6379
+        published: "${RUGRAM_REDIS_HOST_PORT:-16379}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *app-logging
+    networks:
+      - data
+      - server_host_access
+
+  server:
+    <<: *app
+    image: ${RUGRAM_IMAGE_PREFIX:-ghcr.io/yvafa0975-ux/rugram}/server:${RUGRAM_IMAGE_TAG:-main}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: ${RUGRAM_SERVER_BUILD_TARGET:-server-test}
+      args: *build-args
+    environment:
+      RUGRAM_LOG_LEVEL: ${RUGRAM_LOG_LEVEL:-info}
+      RUGRAM_LISTEN: ${RUGRAM_PUBLIC_LISTEN_HOST:-127.0.0.1}:${RUGRAM_SERVER_PORT:-2398}
+      RUGRAM_ADVERTISE_IP: ${RUGRAM_ADVERTISE_IP:?set RUGRAM_ADVERTISE_IP in deploy/docker/.env}
+      RUGRAM_DEFAULT_COUNTRY_CODE: ${RUGRAM_DEFAULT_COUNTRY_CODE:-CN}
+      RUGRAM_PUBLIC_BASE_URL: ${RUGRAM_PUBLIC_BASE_URL:?set RUGRAM_PUBLIC_BASE_URL in deploy/docker/.env}
+      RUGRAM_PUBLIC_APP_SCHEME: ${RUGRAM_PUBLIC_APP_SCHEME:-rugram}
+      RUGRAM_PUBLIC_APP_LINK_BASE: ${RUGRAM_PUBLIC_APP_LINK_BASE:-}
+      RUGRAM_BOT_API_ADDR: ${RUGRAM_BOT_API_ADDR:-}
+      RUGRAM_PUBLIC_WEB_BASE_URL: ${RUGRAM_PUBLIC_WEB_BASE_URL:?set RUGRAM_PUBLIC_WEB_BASE_URL in deploy/docker/.env}
+      RUGRAM_PUBLIC_LINK_WEB_ADDR: ${RUGRAM_LOCAL_LISTEN_HOST:-127.0.0.1}:${RUGRAM_PUBLIC_LINK_PORT:-2401}
+      RUGRAM_POSTGRES_DSN: ${RUGRAM_POSTGRES_DSN:?set RUGRAM_POSTGRES_DSN in deploy/docker/.env}
+      RUGRAM_REDIS_ADDR: ${RUGRAM_REDIS_ADDR:-127.0.0.1:16379}
+      RUGRAM_REDIS_PASSWORD: ${RUGRAM_REDIS_PASSWORD:?set RUGRAM_REDIS_PASSWORD in deploy/docker/.env}
+      RUGRAM_REDIS_DB: 0
+      RUGRAM_ADMIN_API_ADDR: 127.0.0.1:${RUGRAM_ADMIN_API_PORT:-2599}
+      RUGRAM_ADMIN_API_TOKEN: ${RUGRAM_ADMIN_API_TOKEN:?set RUGRAM_ADMIN_API_TOKEN in deploy/docker/.env}
+      RUGRAM_DEV_AUTH_CODE: ${RUGRAM_DEV_AUTH_CODE:-12345}
+      RUGRAM_PHONE_CODE_DELIVERY_PROVIDER: ${RUGRAM_PHONE_CODE_DELIVERY_PROVIDER:-development}
+      RUGRAM_OTP_WEBHOOK_URL: ${RUGRAM_OTP_WEBHOOK_URL:-}
+      RUGRAM_OTP_WEBHOOK_SECRET: ${RUGRAM_OTP_WEBHOOK_SECRET:-}
+      RUGRAM_OTP_WEBHOOK_TIMEOUT: ${RUGRAM_OTP_WEBHOOK_TIMEOUT:-5s}
+      RUGRAM_RSA_KEY: /var/lib/rugram/server_rsa.pem
+      RUGRAM_DONATION_WALLET_KEY_PATH: /var/lib/rugram/donation_wallet.key
+      # Opt in with /var/lib/rugram/wallet; the state must remain on this volume.
+      RUGRAM_WALLET_STATE_DIR: ${RUGRAM_WALLET_STATE_DIR-}
+      RUGRAM_WALLET_KEY_FILE: ${RUGRAM_WALLET_KEY_FILE:-/var/lib/rugram/wallet/keys.key}
+      RUGRAM_RSA_IDENTITY_MODE: ${RUGRAM_RSA_IDENTITY_MODE:-test}
+      RUGRAM_SFU_ENABLE: ${RUGRAM_SFU_ENABLE:-true}
+      RUGRAM_SFU_UDP_PORT: ${RUGRAM_SFU_UDP_PORT:-12399}
+      RUGRAM_SFU_ADVERTISE_IP: ${RUGRAM_SFU_ADVERTISE_IP:?set RUGRAM_SFU_ADVERTISE_IP in deploy/docker/.env}
+      RUGRAM_TURN_ENABLE: ${RUGRAM_TURN_ENABLE:-true}
+      RUGRAM_TURN_UDP_PORT: ${RUGRAM_TURN_UDP_PORT:-12400}
+      RUGRAM_TURN_ADVERTISE_IP: ${RUGRAM_TURN_ADVERTISE_IP:?set RUGRAM_TURN_ADVERTISE_IP in deploy/docker/.env}
+      RUGRAM_TURN_SECRET: ${RUGRAM_TURN_SECRET:?set RUGRAM_TURN_SECRET in deploy/docker/.env}
+      RUGRAM_TURN_RELAY_MIN_PORT: ${RUGRAM_TURN_RELAY_MIN_PORT:-12500}
+      RUGRAM_TURN_RELAY_MAX_PORT: ${RUGRAM_TURN_RELAY_MAX_PORT:-12999}
+      RUGRAM_CALL_TURN_CREDENTIAL_TTL: ${RUGRAM_CALL_TURN_CREDENTIAL_TTL:-6h}
+      RUGRAM_CALL_FORCE_RELAY: ${RUGRAM_CALL_FORCE_RELAY:-false}
+      RUGRAM_LIVESTREAM_ENABLE: ${RUGRAM_LIVESTREAM_ENABLE:-true}
+      RUGRAM_LIVESTREAM_RTMP_ADDR: :${RUGRAM_LIVESTREAM_RTMP_PORT:-2400}
+      RUGRAM_LIVESTREAM_RTMP_URL: ${RUGRAM_LIVESTREAM_RTMP_URL:?set RUGRAM_LIVESTREAM_RTMP_URL in deploy/docker/.env}
+      RUGRAM_LIVESTREAM_WORK_DIR: /var/lib/rugram/livestream
+      RUGRAM_LANGPACK_SEED_DIR: /usr/share/rugram/langpack
+      RUGRAM_BLOB_BACKEND: ${RUGRAM_BLOB_BACKEND:-localfs}
+      RUGRAM_BLOB_DIR: /var/lib/rugram/blobs
+      RUGRAM_BLOB_STAGING_DIR: /var/lib/rugram/blob-staging
+      RUGRAM_MAPTILE_CACHE_DIR: /var/lib/rugram/maptiles
+      RUGRAM_EXTERNAL_MEDIA_ENABLE: ${RUGRAM_EXTERNAL_MEDIA_ENABLE:-true}
+      RUGRAM_WEBPAGE_PREVIEW_ENABLE: ${RUGRAM_WEBPAGE_PREVIEW_ENABLE:-true}
+      RUGRAM_S3_ENDPOINT: ${RUGRAM_S3_ENDPOINT:-}
+      RUGRAM_S3_REGION: ${RUGRAM_S3_REGION:-}
+      RUGRAM_S3_BUCKET: ${RUGRAM_S3_BUCKET:-}
+      RUGRAM_S3_ACCESS_KEY_ID: ${RUGRAM_S3_ACCESS_KEY_ID:-}
+      RUGRAM_S3_SECRET_ACCESS_KEY: ${RUGRAM_S3_SECRET_ACCESS_KEY:-}
+      RUGRAM_S3_USE_SSL: ${RUGRAM_S3_USE_SSL:-true}
+      RUGRAM_S3_PATH_STYLE: ${RUGRAM_S3_PATH_STYLE:-false}
+      RUGRAM_S3_CREATE_BUCKET: ${RUGRAM_S3_CREATE_BUCKET:-false}
+      RUGRAM_SERVER_PORT: ${RUGRAM_SERVER_PORT:-2398}
+      RUGRAM_PUBLIC_LINK_PORT: ${RUGRAM_PUBLIC_LINK_PORT:-2401}
+      RUGRAM_SERVER_HEALTH_IP: ${RUGRAM_SERVER_HEALTH_IP:-127.0.0.1}
+      RUGRAM_SERVER_HEALTH_URL_HOST: ${RUGRAM_SERVER_HEALTH_URL_HOST:-127.0.0.1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - server_state:/var/lib/rugram
+      # Optional sticker/reaction seed (RUGRAM_STICKER_SEED_DIR resolves to /app/data/sticker-seed).
+      - ${RUGRAM_STICKER_SEED_HOST_DIR:-../../data/sticker-seed}:/app/data/sticker-seed:ro
+    network_mode: host
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -O /dev/null "http://$${RUGRAM_SERVER_HEALTH_URL_HOST}:$${RUGRAM_PUBLIC_LINK_PORT}/healthz"
+          && nc -z "$${RUGRAM_SERVER_HEALTH_IP}" "$${RUGRAM_SERVER_PORT}"
+      interval: 5s
+      timeout: 5s
+      retries: 114
+      start_period: 30s
+
+  admin:
+    <<: *app
+    image: ${RUGRAM_IMAGE_PREFIX:-ghcr.io/yvafa0975-ux/rugram}/admin:${RUGRAM_IMAGE_TAG:-main}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: admin
+      args: *build-args
+    environment:
+      RUGRAM_POSTGRES_DSN: ${RUGRAM_POSTGRES_DSN:?set RUGRAM_POSTGRES_DSN in deploy/docker/.env}
+      RUGRAM_ADMIN_API_ADDR: 127.0.0.1:${RUGRAM_ADMIN_API_PORT:-2599}
+      RUGRAM_ADMIN_API_TOKEN: ${RUGRAM_ADMIN_API_TOKEN:?set RUGRAM_ADMIN_API_TOKEN in deploy/docker/.env}
+      RUGRAM_ADMIN_UI_ADDR: ${RUGRAM_ADMIN_LISTEN_HOST:-127.0.0.1}:${RUGRAM_ADMIN_PORT:-2600}
+      RUGRAM_ADMIN_UI_PASSWORD: ${RUGRAM_ADMIN_UI_PASSWORD:?set RUGRAM_ADMIN_UI_PASSWORD in deploy/docker/.env}
+      RUGRAM_ADMIN_UI_TOKEN: ${RUGRAM_ADMIN_UI_TOKEN:-}
+      RUGRAM_ADMIN_SESSION_KEY: ${RUGRAM_ADMIN_SESSION_KEY:?set RUGRAM_ADMIN_SESSION_KEY in deploy/docker/.env}
+      RUGRAM_BLOB_BACKEND: ${RUGRAM_BLOB_BACKEND:-localfs}
+      RUGRAM_BLOB_DIR: /var/lib/rugram/blobs
+      RUGRAM_BLOB_STAGING_DIR: /var/lib/rugram/blob-staging
+      RUGRAM_ADMIN_HEALTH_IP: ${RUGRAM_ADMIN_HEALTH_IP:-127.0.0.1}
+      RUGRAM_ADMIN_PORT: ${RUGRAM_ADMIN_PORT:-2600}
+    depends_on:
+      server:
+        condition: service_healthy
+    volumes:
+      - server_state:/var/lib/rugram:ro
+    network_mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z \"$$RUGRAM_ADMIN_HEALTH_IP\" \"$$RUGRAM_ADMIN_PORT\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+networks:
+  data:
+    internal: true
+  server_host_access:
+  admin_host_access:
+  control:
+    internal: true
+  outbound:
+
+volumes:
+  postgres_data:
+  redis_data:
+  server_state:

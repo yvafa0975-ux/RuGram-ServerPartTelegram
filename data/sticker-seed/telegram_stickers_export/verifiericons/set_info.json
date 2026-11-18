@@ -1,0 +1,112 @@
+{
+  "input_set_type": "inputStickerSetID",
+  "result": {
+    "set": {
+      "id": 7800000000000000000,
+      "access_hash": 7800000000000000099,
+      "title": "Verifier marks",
+      "short_name": "verifiermarks",
+      "count": 2,
+      "hash": 78000005,
+      "archived": false,
+      "official": false,
+      "masks": false,
+      "emojis": true,
+      "thumbs": [],
+      "thumb_dc_id": 2,
+      "thumb_version": 0,
+      "packs": [
+        {
+          "emoticon": "✅",
+          "documents": [
+            7800000000000000025
+          ]
+        },
+        {
+          "emoticon": "⏳",
+          "documents": [
+            7800000000000000026
+          ]
+        }
+      ]
+    },
+    "packs": [
+      {
+        "emoticon": "✅",
+        "documents": [
+          7800000000000000025
+        ]
+      },
+      {
+        "emoticon": "⏳",
+        "documents": [
+          7800000000000000026
+        ]
+      }
+    ],
+    "documents": [
+      {
+        "id": 7800000000000000025,
+        "access_hash": 7800000000000000125,
+        "file_reference": "",
+        "date": "2026-11-12T00:00:00Z",
+        "mime_type": "application/x-tgsticker",
+        "size": 886,
+        "dc_id": 2,
+        "attributes": [
+          {
+            "_": "DocumentAttributeImageSize",
+            "w": 512,
+            "h": 512
+          },
+          {
+            "_": "DocumentAttributeCustomEmoji",
+            "alt": "✅",
+            "free": false,
+            "text_color": true,
+            "stickerset": {
+              "id": 7800000000000000000,
+              "access_hash": 7800000000000000099
+            }
+          },
+          {
+            "_": "DocumentAttributeFilename",
+            "file_name": "Major.tgs"
+          }
+        ],
+        "thumbs": []
+      },
+      {
+        "id": 7800000000000000026,
+        "access_hash": 7800000000000000126,
+        "file_reference": "",
+        "date": "2026-11-12T00:00:00Z",
+        "mime_type": "application/x-tgsticker",
+        "size": 650,
+        "dc_id": 2,
+        "attributes": [
+          {
+            "_": "DocumentAttributeImageSize",
+            "w": 512,
+            "h": 512
+          },
+          {
+            "_": "DocumentAttributeCustomEmoji",
+            "alt": "⏳",
+            "free": false,
+            "text_color": true,
+            "stickerset": {
+              "id": 7800000000000000000,
+              "access_hash": 7800000000000000099
+            }
+          },
+          {
+            "_": "DocumentAttributeFilename",
+            "file_name": "Hold.tgs"
+          }
+        ],
+        "thumbs": []
+      }
+    ]
+  }
+}

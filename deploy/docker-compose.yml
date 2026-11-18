@@ -1,0 +1,75 @@
+# rugram phase-1 third-party dependencies (for development).
+#
+#   Start:  docker compose up -d
+#   Status: docker compose ps
+#   Stop:   docker compose down          (keeps data volumes)
+#   Reset:  docker compose down -v        (deletes data volumes too, resetting schema/data)
+#
+# main / v2 use rugram_main / rugram_v2 respectively; the legacy rugram database is
+# kept only for compatibility and manual migration.
+# The server-side connection strings use each branch's defaults in internal/config/config.go
+# (localhost:5432 / localhost:6399).
+name: rugram
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: rugram-postgres
+    # The whole database is de-partitioned (ordinary tables); the default
+    # max_locks_per_transaction of 64 is enough; 512 just leaves headroom at near-zero
+    # memory cost.
+    # pg_stat_statements: aggregates each SQL's cumulative/average duration and call
+    # count, to locate postgres-container CPU hotspots (rugram is a host process, so
+    # the CPU spikes in docker stats are this container). A view exists only after
+    # CREATE EXTENSION:
+    #   docker exec -i rugram-postgres psql -U rugram -d rugram -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_locks_per_transaction=512"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "track_io_timing=on"
+    environment:
+      POSTGRES_DB: rugram_main
+      POSTGRES_USER: rugram
+      POSTGRES_PASSWORD: ${RUGRAM_POSTGRES_PASSWORD:-rugram}
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rugram -d rugram_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: rugram-redis
+    environment:
+      REDIS_PASSWORD: ${RUGRAM_REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"
+    ports:
+      - "6399:6379"   # host port 6379 is often taken by other projects; rugram exposes 6399 (still 6379 inside the container)
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then export REDISCLI_AUTH=\"$$REDIS_PASSWORD\"; fi; redis-cli --no-auth-warning ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

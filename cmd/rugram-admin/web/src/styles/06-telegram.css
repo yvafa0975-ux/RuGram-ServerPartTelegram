@@ -1,0 +1,498 @@
+/* ==========================================================================
+   RuGram theme layer — Telegram-style look & feel
+   --------------------------------------------------------------------------
+   Imported last (see styles.css), so it refines the foundation without
+   touching the page files. It works in two moves:
+
+     1. Re-tints the design tokens (:root / [data-theme="dark"]) to the
+        Telegram palette — blue #3390ec, the #2AABEE→#229ED9 gradient, a
+        white sidebar in light mode, #0e1621/#17212b surfaces in dark mode.
+        Everything downstream reads these variables, so cards, tables,
+        inputs and badges restyle for free.
+     2. Polishes the shell itself: a glass top bar, a light sidebar with a
+        blue active pill, gradient primary buttons and softer, rounder
+        surfaces.
+
+   Only visual properties are changed here; no layout or behaviour.
+   ========================================================================== */
+
+/* ---- Light tokens -------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #eef2f7;
+  --bg-accent: #e7edf4;
+  --panel: #ffffff;
+  --panel-subtle: #f6f8fb;
+  --panel-strong: #eef2f7;
+  --skeleton-base: #e3e9f0;
+  --skeleton-sheen: #f3f6fa;
+  --surface-soft: #eef4fb;
+  --overlay: rgba(15, 23, 32, 0.45);
+  --topbar-bg: rgba(255, 255, 255, 0.82);
+
+  /* Lines */
+  --line: #e6ebf1;
+  --line-strong: #d4dbe4;
+
+  /* Text */
+  --heading: #0f1720;
+  --text: #17212b;
+  --text-soft: #33404d;
+  --muted: #6b7683;
+  --muted-2: #94a0ad;
+
+  /* Brand — Telegram blue */
+  --brand: #3390ec;
+  --brand-strong: #2b82d9;
+  --brand-2: #2aabee;
+  --grad: linear-gradient(135deg, #2aabee 0%, #229ed9 100%);
+  --brand-tint: #e8f3fd;
+  --brand-tint-border: #c6e2f8;
+  --brand-tint-text: #1867a8;
+
+  /* Semantic */
+  --good: #1f8a4c;
+  --good-tint: #e7f6ee;
+  --good-border: #bde3cd;
+  --warn: #a15c07;
+  --warn-tint: #fdf3e2;
+  --warn-border: #e7d09e;
+  --danger: #d64545;
+  --danger-tint: #fdecec;
+  --danger-border: #f2cccc;
+  --danger-text: #a83232;
+
+  /* Accent (collectibles / craft) */
+  --purple: #7b61c9;
+  --purple-tint: #f1edfb;
+  --purple-border: #ddd2f2;
+  --purple-text: #5f4aa0;
+
+  /* Inputs & controls */
+  --input-bg: #ffffff;
+  --btn-bg: #ffffff;
+  --btn-text: #29323d;
+  --btn-hover: #f1f5f9;
+  --switch-track: #c8d0d6;
+
+  /* Code / JSON blocks */
+  --code-bg: #0f1a24;
+  --code-text: #d6e3ef;
+  --code-border: #223140;
+
+  /* Sidebar — light surface in light mode (Telegram Web/Desktop) */
+  --sidebar: #ffffff;
+  --sidebar-soft: #eef4fb;
+  --sidebar-line: #e6ebf1;
+  --sidebar-row: #f5f8fb;
+  --sidebar-text: #33404d;
+  --sidebar-muted: #6b7683;
+  --sidebar-faint: #94a0ad;
+  --sidebar-heading: #0f1720;
+
+  /* Effects */
+  --focus: rgba(51, 144, 236, 0.18);
+  --shadow: 0 22px 52px -30px rgba(15, 23, 32, 0.30);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-brand: 0 8px 20px rgba(51, 144, 236, 0.30);
+  --hero-glow: rgba(51, 144, 236, 0.16);
+  --hero-grid: rgba(15, 23, 32, 0.035);
+
+  /* Radii — a touch rounder than the foundation */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius: 12px;
+  --radius-lg: 16px;
+}
+
+/* ---- Dark tokens --------------------------------------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e1621;
+  --bg-accent: #111c28;
+  --panel: #17212b;
+  --panel-subtle: #1c2733;
+  --panel-strong: #202c39;
+  --skeleton-base: #202c39;
+  --skeleton-sheen: #2b3a49;
+  --surface-soft: #1a2531;
+  --overlay: rgba(3, 7, 12, 0.66);
+  --topbar-bg: rgba(23, 33, 43, 0.78);
+
+  --line: #253340;
+  --line-strong: #344456;
+
+  --heading: #f1f5f9;
+  --text: #dbe4ee;
+  --text-soft: #c2cedb;
+  --muted: #8b9aa9;
+  --muted-2: #6b7a89;
+
+  --brand: #5eaef7;
+  --brand-strong: #7bbcf9;
+  --brand-2: #7cd1fb;
+  --brand-tint: #172c42;
+  --brand-tint-border: #254a6e;
+  --brand-tint-text: #a9cdf2;
+
+  --good: #4cc38a;
+  --good-tint: #12301f;
+  --good-border: #245639;
+  --warn: #e0aa4d;
+  --warn-tint: #322810;
+  --warn-border: #574413;
+  --danger: #ec6a5e;
+  --danger-tint: #35201d;
+  --danger-border: #5c332d;
+  --danger-text: #f0a49b;
+
+  --purple: #ac90e2;
+  --purple-tint: #221b31;
+  --purple-border: #3d3357;
+  --purple-text: #c9b6ef;
+
+  --input-bg: #131d28;
+  --btn-bg: #1e2a36;
+  --btn-text: #dbe4ee;
+  --btn-hover: #26333f;
+  --switch-track: #3a4753;
+
+  --code-bg: #0a121a;
+  --code-text: #cdd9e5;
+  --code-border: #22303d;
+
+  --sidebar: #17212b;
+  --sidebar-soft: #202c39;
+  --sidebar-line: #253340;
+  --sidebar-row: #1c2733;
+  --sidebar-text: #cbd6e2;
+  --sidebar-muted: #8494a4;
+  --sidebar-faint: #6d7d8d;
+  --sidebar-heading: #f1f5f9;
+
+  --focus: rgba(94, 174, 247, 0.26);
+  --shadow: 0 22px 50px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-brand: 0 8px 20px rgba(94, 174, 247, 0.28);
+  --hero-glow: rgba(94, 174, 247, 0.26);
+  --hero-grid: rgba(255, 255, 255, 0.035);
+}
+
+/* ---- Global niceties ----------------------------------------------------- */
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-2);
+  background-clip: content-box;
+}
+
+/* ---- Sidebar ------------------------------------------------------------- */
+.sidebar {
+  border-right: 0;
+  box-shadow: 1px 0 0 var(--sidebar-line), 0 0 44px rgba(15, 23, 32, 0.04);
+}
+
+[data-theme="dark"] .sidebar {
+  box-shadow: 1px 0 0 var(--sidebar-line);
+}
+
+/* The foundation hard-codes two dark border tones for the sidebar rows; route
+   them through the token so they read correctly on a light surface too. */
+.nav-item:hover,
+.nav-item.active,
+.nav-section-toggle:hover,
+.nav-section.active .nav-section-toggle,
+.sidebar-toggle:hover {
+  border-color: var(--sidebar-line);
+}
+
+.runtime-row {
+  border: 1px solid var(--sidebar-line);
+}
+
+.brand strong {
+  letter-spacing: -0.01em;
+}
+
+.brand-mark {
+  box-shadow: 0 2px 10px rgba(15, 23, 32, 0.14);
+}
+
+.sidebar-label {
+  letter-spacing: 0.06em;
+}
+
+.nav-item,
+.nav-section-toggle {
+  position: relative;
+  border-radius: 10px;
+}
+
+.nav-item.active {
+  color: var(--brand);
+  background: var(--brand-tint);
+  border-color: var(--brand-tint-border);
+  font-weight: 700;
+}
+
+/* A short blue rail marks the current section, the way Telegram's selected
+   chat gets a coloured edge. */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -1px;
+  width: 3px;
+  height: 18px;
+  background: var(--brand);
+  border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+}
+
+.nav-item.active .nav-dot {
+  background: var(--brand);
+}
+
+/* ---- Top bar ------------------------------------------------------------- */
+.topbar {
+  border-bottom: 0;
+  background: var(--topbar-bg);
+  box-shadow: 0 1px 0 var(--line), 0 8px 24px -22px rgba(15, 23, 32, 0.55);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+}
+
+.topbar h1 {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+.btn {
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn.primary {
+  color: #ffffff;
+  background: var(--grad);
+  border-color: transparent;
+  box-shadow: var(--shadow-brand);
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--grad);
+  border-color: transparent;
+  filter: brightness(1.06);
+  box-shadow: 0 10px 24px rgba(51, 144, 236, 0.34);
+}
+
+.btn.primary:active:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(51, 144, 236, 0.3);
+}
+
+/* ---- Surfaces ------------------------------------------------------------ */
+.page-frame,
+.section-block,
+.surface,
+.overview-band,
+.table-wrap,
+.action-dock,
+.launcher,
+.login-panel {
+  border-radius: var(--radius-lg);
+}
+
+.section-block,
+.surface,
+.page-frame {
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Tabs ---------------------------------------------------------------- */
+.tab-bar {
+  border-radius: 999px;
+}
+
+.tab-btn {
+  border-radius: 999px;
+}
+
+.tab-btn.active {
+  color: var(--brand);
+  box-shadow: 0 1px 2px rgba(15, 23, 32, 0.1);
+}
+
+/* ---- Tables -------------------------------------------------------------- */
+.data-table th {
+  color: var(--text-soft);
+  background: var(--panel-subtle);
+  letter-spacing: 0.01em;
+}
+
+.data-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+/* ---- Login screen -------------------------------------------------------- */
+.login-panel {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+/* ==========================================================================
+   Telegram polish, layer 2
+   --------------------------------------------------------------------------
+   A more committed Telegram look: the selected item becomes a filled blue
+   pill (the way Telegram Desktop paints the open chat), the brand mark turns
+   into a round app icon with the Telegram gradient, and the shell gets a soft
+   blue wash so the whole console reads as "Telegram" at a glance.
+   ========================================================================== */
+
+/* App background — a faint blue wash instead of flat grey. */
+.app-shell,
+.app-main,
+.content-scroll {
+  background-image: radial-gradient(
+    120% 90% at 100% 0%,
+    color-mix(in srgb, var(--brand) 7%, transparent) 0%,
+    transparent 55%
+  );
+}
+
+/* Brand mark — round, gradient, glow. Reads as the app icon. */
+.brand-mark {
+  border-radius: 50%;
+  background: var(--grad);
+  box-shadow: 0 4px 14px rgba(51, 144, 236, 0.35);
+}
+
+.brand-mark img {
+  border-radius: 50%;
+}
+
+.brand-elevated .brand-mark {
+  box-shadow: var(--shadow-brand), 0 0 0 4px color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+/* Sidebar — a hair of blue at the top so the rail feels branded. */
+.sidebar {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand) 6%, var(--sidebar)) 0%,
+    var(--sidebar) 180px
+  );
+}
+
+/* Selected nav item — a filled blue gradient pill, Telegram Desktop style.
+   White text on blue, no side rail needed. */
+.nav-item.active {
+  color: #ffffff;
+  background: var(--grad);
+  border-color: transparent;
+  box-shadow: 0 6px 16px -6px rgba(51, 144, 236, 0.65);
+}
+
+.nav-item.active::before {
+  display: none;
+}
+
+.nav-item.active .nav-dot,
+.nav-item.active svg {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.nav-item.active svg {
+  background: transparent;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .nav-item.active {
+  color: #0b1621;
+}
+
+[data-theme="dark"] .nav-item.active svg {
+  color: #0b1621;
+}
+
+/* Section toggle that owns the active page gets the same blue ink. */
+.nav-section.active .nav-section-toggle {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+/* Pills — chips, badges, tabs pick up the blue accent. */
+.chip.active,
+.badge.brand,
+.pill.active {
+  background: var(--grad);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.tab-btn.active {
+  color: var(--brand);
+  background: var(--brand-tint);
+  border-color: var(--brand-tint-border);
+}
+
+/* Primary call-to-action buttons get the full Telegram pill treatment. */
+.btn.primary,
+.btn.warn {
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* Cards — slightly larger radius and a soft hover lift. */
+.section-block,
+.surface,
+.page-frame,
+.table-wrap {
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+
+.section-block:hover,
+.surface:hover {
+  box-shadow: var(--shadow);
+}
+
+/* Inputs — a blue focus ring, like Telegram's compose field. */
+.input:focus,
+.input:focus-visible,
+textarea:focus,
+select:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--focus);
+  outline: none;
+}

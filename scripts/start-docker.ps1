@@ -1,0 +1,102 @@
+[CmdletBinding()]
+param(
+    [Parameter()]
+    [string]$AdvertiseIP = "",
+
+    [Parameter()]
+    [string]$PublicBaseURL = "",
+
+    [Parameter()]
+    [string]$PublicWebBaseURL = "",
+
+    [Parameter()]
+    [string]$AdminBindIP = "",
+
+    [Parameter()]
+    [switch]$HostNetwork,
+
+    [Parameter()]
+    [switch]$BridgeNetwork,
+
+    [Parameter()]
+    [switch]$AllowInsecureDevelopmentAuth,
+
+    [Parameter()]
+    [switch]$Build,
+
+    # Never contact the registry: start the images already present locally
+    # (for example a stack built earlier with -Build). With -Build, base images
+    # are not refreshed.
+    [Parameter()]
+    [switch]$NoPull
+)
+
+$ErrorActionPreference = "Stop"
+if ($HostNetwork -and $BridgeNetwork) { throw "HostNetwork and BridgeNetwork are mutually exclusive." }
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$dockerDir = Join-Path $repoRoot "deploy\docker"
+$composePath = Join-Path $dockerDir "compose.yaml"
+$envPath = Join-Path $dockerDir ".env"
+$generatorPath = Join-Path $PSScriptRoot "new-docker-env.ps1"
+
+if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
+    if ([string]::IsNullOrWhiteSpace($AdvertiseIP)) { $AdvertiseIP = "127.0.0.1" }
+    $generatorArguments = @{ AdvertiseIP = $AdvertiseIP }
+    if (-not [string]::IsNullOrWhiteSpace($PublicBaseURL)) { $generatorArguments.PublicBaseURL = $PublicBaseURL }
+    if (-not [string]::IsNullOrWhiteSpace($PublicWebBaseURL)) { $generatorArguments.PublicWebBaseURL = $PublicWebBaseURL }
+    if (-not [string]::IsNullOrWhiteSpace($AdminBindIP)) { $generatorArguments.AdminBindIP = $AdminBindIP }
+    if ($HostNetwork) { $generatorArguments.HostNetwork = $true }
+    if ($BridgeNetwork) { $generatorArguments.BridgeNetwork = $true }
+    if ($AllowInsecureDevelopmentAuth) { $generatorArguments.AllowInsecureDevelopmentAuth = $true }
+    & $generatorPath @generatorArguments
+}
+elseif ($PSBoundParameters.Keys | Where-Object { $_ -notin @("Build", "NoPull") }) {
+    Write-Warning "deploy/docker/.env already exists; initialization options were ignored to preserve credentials and deployment identity."
+}
+
+$deployment = @{}
+foreach ($line in Get-Content -LiteralPath $envPath) {
+    if ($line -match '^([A-Z0-9_]+)=(.*)$') { $deployment[$Matches[1]] = $Matches[2] }
+}
+if ($deployment['RUGRAM_DEPLOYMENT_PROFILE'] -ne 'main-monolith-v1') {
+    throw "$envPath belongs to an older or different topology; move it aside and rerun so credentials are regenerated safely."
+}
+
+$composeBase = @("compose", "--project-directory", $dockerDir, "--env-file", $envPath, "--file", $composePath)
+$hostNetworkValue = $deployment['RUGRAM_SERVER_HOST_NETWORK']
+if ([string]::IsNullOrWhiteSpace($hostNetworkValue)) { $hostNetworkValue = "true" }
+if ($hostNetworkValue -ne "true" -and $hostNetworkValue -ne "false") { throw "RUGRAM_SERVER_HOST_NETWORK must be true or false." }
+if ($hostNetworkValue -eq "false") { $composeBase += @("--file", (Join-Path $dockerDir "compose.bridge-network.yaml")) }
+
+function Invoke-Compose {
+    param([string[]]$Arguments)
+    & docker @composeBase @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "docker compose $($Arguments -join ' ') failed with exit code $LASTEXITCODE" }
+}
+
+Invoke-Compose -Arguments @("config", "--quiet")
+$upArguments = @("up", "--detach", "--no-build", "--wait", "--wait-timeout", "600")
+if ($Build -and -not $NoPull) { Invoke-Compose -Arguments @("build", "--pull") }
+elseif ($Build) { Invoke-Compose -Arguments @("build") }
+elseif (-not $NoPull) { Invoke-Compose -Arguments @("pull") }
+# Without a pull, a missing image must fail here instead of being fetched
+# silently and replacing a locally built tag (rugram#136).
+if ($NoPull) { $upArguments += @("--pull", "never") }
+try { Invoke-Compose -Arguments $upArguments }
+catch { & docker @composeBase logs --no-color --tail 160; throw }
+
+Invoke-Compose -Arguments @("ps", "--all")
+Write-Host "rugram main Docker stack is ready. Configuration: $envPath"
+if ($deployment['RUGRAM_PHONE_CODE_DELIVERY_PROVIDER'] -eq 'development') { Write-Host "Development login code: $($deployment['RUGRAM_DEV_AUTH_CODE'])" }
+Write-Host "MTProto: $($deployment['RUGRAM_ADVERTISE_IP']):$($deployment['RUGRAM_SERVER_PORT'])"
+if ($deployment['RUGRAM_TURN_ENABLE'] -eq 'true') {
+    Write-Host "TURN/STUN: udp://$($deployment['RUGRAM_TURN_ADVERTISE_IP']):$($deployment['RUGRAM_TURN_UDP_PORT'])"
+    $turnRelayMaxPort = $deployment['RUGRAM_TURN_RELAY_MAX_PORT']
+    if ($hostNetworkValue -eq 'false') { $turnRelayMaxPort = $deployment['RUGRAM_TURN_BRIDGE_RELAY_MAX_PORT'] }
+    Write-Host "TURN relay UDP range: $($deployment['RUGRAM_TURN_RELAY_MIN_PORT'])-$turnRelayMaxPort"
+}
+$adminHost = $deployment['RUGRAM_ADMIN_BIND_IP']
+if ($adminHost -eq "0.0.0.0" -or $adminHost -eq "::") { $adminHost = $deployment['RUGRAM_ADVERTISE_IP'] }
+if ($adminHost.Contains(":")) { $adminHost = "[${adminHost}]" }
+Write-Host "Admin UI: http://${adminHost}:$($deployment['RUGRAM_ADMIN_PORT']) (password is stored in $envPath)"

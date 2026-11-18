@@ -1,0 +1,69 @@
+# Go build artifacts
+/bin/
+*.exe
+# Root build output from `go build ./...` -- never a repo artifact.
+/rugram
+/rugram-admin
+/rugram-load
+/rugram-update
+/rugram-backup
+*.test
+*.out
+coverage.*
+node_modules/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 本地环境 / 密钥（server RSA private key 必须持久化，但禁止入库）
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+/secrets/
+/data/*
+!/data/langpack/
+!/data/langpack/**
+# Bundled seed data that ships with the factory build and loads automatically on
+# a fresh install: the custom verifier checkmark sticker set (plus the sources
+# it was generated from). The classic gift pack is embedded in the binary from
+# internal/seed/giftseed, so it is not listed here.
+!/data/sticker-seed/
+!/data/sticker-seed/**
+logs/
+tmp/
+.gocache/
+.tdesktop-e2e/
+# Telegram 授权会话与 QR 登录产物（giftfetch -login-qr / appearancefetch /
+# giftfetch_telethon.py）。这些文件等价于账号凭据，任何情况下都不得入库。
+*.session
+*.session.qr.png
+# The sticker-export tool writes Telegram session credentials next to the
+# exported set; they are account credentials and must never be committed.
+.cookies
+.csrf
+
+# IDE
+.idea/
+.vscode/
+
+# rugram-backup bundles: they contain .env, the server RSA key and the login
+# signing keys. Never commit them.
+/backup/
+/backups/
+/bundle/
+*.tar.zst
+*.sql.zst
+*.rdb.zst
+
+# Internal server deployment script (not part of the public repository)
+/scripts/install.sh
+
+# Local scratch files (not part of the repository)
+/gifts_catalog/
+/fix_docs.py
+/main.py
