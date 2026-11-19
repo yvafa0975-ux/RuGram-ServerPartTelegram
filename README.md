@@ -112,6 +112,32 @@ host-сеть там не пробрасывает порты на хост-ма
 
 Пароль админ-панели — `RUGRAM_ADMIN_UI_PASSWORD` в `deploy/docker/.env`.
 
+### HTTPS-шлюз для входа с телефонов (ngrok)
+
+Веб-клиент telegram-tt разворачивается отдельно от сервера и требует HTTPS
+(иначе браузер не даст `crypto.subtle`). Один общий адрес поднимается так:
+
+```powershell
+# 1. Локальная раздача клиента + прокси /apiws* на сервер
+cd C:\Users\max\Downloads\rugram-web\telegram-tt
+node rugram-serve.mjs --port 8080 --backend 127.0.0.1:2398
+
+# 2. Туннель ngrok (токен держим в переменной окружения, не в репозитории)
+$env:NGROK_AUTHTOKEN = '<ваш authtoken с dashboard.ngrok.com>'
+docker run -d --name rugram-ngrok --restart unless-stopped `
+  -e NGROK_AUTHTOKEN=$env:NGROK_AUTHTOKEN `
+  ngrok/ngrok:latest http --log=stdout host.docker.internal:8080
+
+# 3. Разрешить Origin веб-клиента на сервере
+#    deploy/docker/.env:
+#    RUGRAM_WEBSOCKET_ALLOWED_ORIGINS=https://<ваш-домен>.ngrok-free.dev
+```
+
+После этого пересоздайте сервер (`docker compose ... up -d --no-build`) и
+раздайте одну ссылку. Гость видит страницу-предупреждение ngrok один раз и
+нажимает **Visit Site**; код входа — `12345`. Домен ngrok бесплатного аккаунта
+постоянный, поэтому ссылка не меняется при перезапуске туннеля.
+
 ### Если запускать вручную
 
 ```powershell
